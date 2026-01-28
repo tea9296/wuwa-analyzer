@@ -219,7 +219,7 @@ export const convertToTrackerFormat = (fetchedData) => {
  * 常駐五星角色列表（這個列表很少變動）
  */
 const STANDARD_FIVE_STAR_CHARACTERS = [
-  '凌陽', '鑒心',
+  '凌陽', '維里奈', '安可', '卡卡羅', '鑒心',
 ];
 
 /**
