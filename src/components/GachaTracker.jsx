@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { LineChart, Trophy, Info, ChevronLeft, ChevronRight, Copy, Check, Download, Terminal, Link, ExternalLink, Sparkles } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { LineChart, Trophy, Info, ChevronLeft, ChevronRight, Copy, Check, Download, Terminal, Link, ExternalLink, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import * as wuwaCalc from '../utils/gachaCalculator';
 import * as genshinCalc from '../utils/genshinCalculator';
+import * as wuwaFetcher from '../utils/wuwaGachaFetcher';
 
 // 各遊戲的匯入設定
 const GAME_CONFIGS = {
@@ -152,10 +153,12 @@ const LuckGauge = ({ percentile, luckRank, avgPullsPerLimited }) => {
 };
 
 // 匯入資料面板組件
-const ImportPanel = ({ gameConfig, onImport }) => {
+const ImportPanel = ({ gameConfig, currentGame, onImport }) => {
   const [copied, setCopied] = useState(false);
   const [inputUrl, setInputUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [progress, setProgress] = useState(null);
 
   const handleCopy = async () => {
     try {
@@ -171,20 +174,86 @@ const ImportPanel = ({ gameConfig, onImport }) => {
     if (!inputUrl.trim()) return;
     
     setIsLoading(true);
+    setError('');
+    setProgress(null);
+
     try {
-      // TODO: 這裡之後會實作實際的 API 呼叫
-      // const response = await fetch(inputUrl);
-      // const data = await response.json();
-      // onImport(data);
-      
-      // 目前先模擬延遲
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      alert('匯入功能開發中！URL: ' + inputUrl);
+      // 根據不同遊戲使用不同的匯入邏輯
+      if (currentGame === 'WutheringWaves') {
+        // 鳴潮：使用 wuwaGachaFetcher
+        const fetchedData = await wuwaFetcher.fetchAllGachaRecords(
+          inputUrl,
+          (progressInfo) => {
+            setProgress(progressInfo);
+          }
+        );
+
+        if (fetchedData.totalCount === 0) {
+          throw new Error('未找到任何抽卡紀錄，請確認 URL 是否正確');
+        }
+
+        // 轉換成 Tracker 可用的格式
+        const trackerData = wuwaFetcher.convertToTrackerFormat(fetchedData);
+        
+        // 計算每筆紀錄的保底數
+        const dataWithPity = calculatePityForRecords(trackerData, gameConfig.calculator);
+        
+        onImport(dataWithPity, {
+          playerId: fetchedData.playerId,
+          totalCount: fetchedData.totalCount,
+          recordsByPool: fetchedData.recordsByPool
+        });
+      } else {
+        // 其他遊戲暫時顯示開發中訊息
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setError(`${gameConfig.name} 的匯入功能開發中！`);
+      }
     } catch (error) {
       console.error('匯入失敗:', error);
+      setError(error.message || '匯入失敗，請檢查 URL 是否正確');
     } finally {
       setIsLoading(false);
+      setProgress(null);
     }
+  };
+
+  // 計算每筆紀錄的保底數並判斷是否為限定
+  const calculatePityForRecords = (records, calc) => {
+    // 按時間排序（舊的在前）
+    const sortedRecords = [...records].sort((a, b) => 
+      new Date(a.time) - new Date(b.time)
+    );
+
+    // 常駐五星角色（很少變動）
+    const STANDARD_FIVE_STAR_CHARACTERS = ['凌陽', '維里奈', '安可', '卡卡羅', '鑒心'];
+
+    let pityCount = 0;
+    const result = sortedRecords.map(record => {
+      pityCount++;
+      
+      // 判斷是否為限定五星（只統計角色活動池）
+      // 邏輯：角色活動池(1) + 不在常駐角色列表 = 限定
+      let isLimited = false;
+      if (record.rarity === 5 && record.poolType === 1) {
+        isLimited = !STANDARD_FIVE_STAR_CHARACTERS.includes(record.name);
+      }
+      
+      const recordWithPity = {
+        ...record,
+        pity: record.rarity === 5 ? pityCount : 0,
+        isLimited
+      };
+      
+      // 如果是五星，重置保底
+      if (record.rarity === 5) {
+        pityCount = 0;
+      }
+      
+      return recordWithPity;
+    });
+
+    // 反轉回最新的在前面
+    return result.reverse();
   };
 
   return (
@@ -253,11 +322,34 @@ const ImportPanel = ({ gameConfig, onImport }) => {
           <input
             type="text"
             value={inputUrl}
-            onChange={(e) => setInputUrl(e.target.value)}
+            onChange={(e) => {
+              setInputUrl(e.target.value);
+              setError(''); // 清除錯誤訊息
+            }}
             placeholder="在這裡貼上連結..."
-            className="w-full bg-slate-900 border border-slate-600 rounded-lg p-4 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition"
+            className={`w-full bg-slate-900 border rounded-lg p-4 text-slate-100 placeholder:text-slate-500 focus:outline-none transition ${
+              error ? 'border-red-500 focus:border-red-400' : 'border-slate-600 focus:border-blue-500'
+            }`}
           />
         </div>
+
+        {/* 錯誤訊息 */}
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">
+            <AlertCircle size={18} />
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
+
+        {/* 進度顯示 */}
+        {isLoading && progress && (
+          <div className="flex items-center gap-3 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg text-blue-400">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm">
+              正在獲取 {progress.currentPool}... ({progress.current + 1}/{progress.total})
+            </span>
+          </div>
+        )}
 
         {/* 匯入按鈕 */}
         <div className="flex justify-end">
@@ -266,13 +358,29 @@ const ImportPanel = ({ gameConfig, onImport }) => {
             disabled={!inputUrl.trim() || isLoading}
             className="flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-600 disabled:cursor-not-allowed text-slate-900 font-semibold rounded-lg transition"
           >
-            <Download size={18} />
-            {isLoading ? '匯入中...' : '匯入資料'}
+            {isLoading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                匯入中...
+              </>
+            ) : (
+              <>
+                <Download size={18} />
+                匯入資料
+              </>
+            )}
           </button>
         </div>
       </div>
     </div>
   );
+};
+
+// localStorage key 常數
+const STORAGE_KEYS = {
+  WutheringWaves: 'wuwa_gacha_data',
+  Genshin: 'genshin_gacha_data',
+  StarRail: 'starrail_gacha_data',
 };
 
 const GachaTracker = () => {
@@ -285,16 +393,62 @@ const GachaTracker = () => {
   const gameConfig = GAME_CONFIGS[currentGame];
   const calc = gameConfig.calculator;
 
-  // 根據遊戲生成模擬資料
-  const [gachaData, setGachaData] = useState(() => calc.simulateGacha(500));
+  // 從 localStorage 讀取已保存的資料，沒有則使用模擬資料
+  const [gachaData, setGachaData] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.WutheringWaves);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('讀取 localStorage 失敗:', e);
+    }
+    return calc.simulateGacha(500);
+  });
 
-  // 切換遊戲時重新生成模擬資料
+  // 初始化時檢查是否有已保存的資料
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS[currentGame]);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          setIsSimulatedData(false);
+          setShowImportPanel(false);
+        }
+      }
+    } catch (e) {
+      console.warn('檢查 localStorage 失敗:', e);
+    }
+  }, []);
+
+  // 切換遊戲時讀取該遊戲的已保存資料，沒有則使用模擬資料
   const handleGameChange = (gameKey) => {
     setCurrentGame(gameKey);
     setCurrentPage(1);
     const newCalc = GAME_CONFIGS[gameKey].calculator;
+    
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS[gameKey]);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          setGachaData(parsed);
+          setIsSimulatedData(false);
+          setShowImportPanel(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('讀取 localStorage 失敗:', e);
+    }
+    
     setGachaData(newCalc.simulateGacha(500));
-    setIsSimulatedData(true); // 切換遊戲時使用模擬資料
+    setIsSimulatedData(true);
+    setShowImportPanel(true);
   };
 
   // --- 使用對應遊戲的計算工具 ---
@@ -308,11 +462,42 @@ const GachaTracker = () => {
   const currentItems = gachaData.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(gachaData.length / itemsPerPage);
 
-  const handleImport = (data) => {
+  // 儲存匯入的元資料 (玩家ID, 各卡池統計等)
+  const [importMeta, setImportMeta] = useState(null);
+
+  const handleImport = (data, metadata = null) => {
     setGachaData(data);
+    setImportMeta(metadata);
     setShowImportPanel(false);
     setCurrentPage(1);
     setIsSimulatedData(false); // 匯入實際資料
+    
+    // 保存到 localStorage
+    try {
+      localStorage.setItem(STORAGE_KEYS[currentGame], JSON.stringify(data));
+      if (metadata) {
+        localStorage.setItem(`${STORAGE_KEYS[currentGame]}_meta`, JSON.stringify(metadata));
+      }
+    } catch (e) {
+      console.warn('保存到 localStorage 失敗:', e);
+    }
+  };
+
+  // 清除已保存的資料
+  const handleClearData = () => {
+    if (window.confirm('確定要清除已保存的抽卡紀錄嗎？此操作無法復原。')) {
+      try {
+        localStorage.removeItem(STORAGE_KEYS[currentGame]);
+        localStorage.removeItem(`${STORAGE_KEYS[currentGame]}_meta`);
+      } catch (e) {
+        console.warn('清除 localStorage 失敗:', e);
+      }
+      setGachaData(calc.simulateGacha(500));
+      setImportMeta(null);
+      setIsSimulatedData(true);
+      setShowImportPanel(true);
+      setCurrentPage(1);
+    }
   };
 
   return (
@@ -353,6 +538,28 @@ const GachaTracker = () => {
         </div>
       )}
 
+      {/* 已匯入資料提示 */}
+      {!isSimulatedData && (
+        <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <Check size={20} className="text-green-400 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-green-400">已載入實際抽卡紀錄</div>
+              <div className="text-sm text-green-200/80 mt-1">
+                共 {gachaData.length} 筆紀錄{importMeta?.playerId && `，玩家 ID: ${importMeta.playerId}`}
+                <span className="text-green-300/60 ml-2">（資料已自動保存）</span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleClearData}
+            className="text-sm text-red-400 hover:text-red-300 transition shrink-0"
+          >
+            清除資料
+          </button>
+        </div>
+      )}
+
       {/* 匯入面板切換按鈕 */}
       <button
         onClick={() => setShowImportPanel(!showImportPanel)}
@@ -364,7 +571,11 @@ const GachaTracker = () => {
 
       {/* 匯入資料面板 */}
       {showImportPanel && (
-        <ImportPanel gameConfig={gameConfig} onImport={handleImport} />
+        <ImportPanel 
+          gameConfig={gameConfig} 
+          currentGame={currentGame}
+          onImport={handleImport} 
+        />
       )}
 
       {/* 數據卡片 */}
