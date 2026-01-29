@@ -273,8 +273,24 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
   }
 
   // API 資料是最新的在前面（index 0），我們需要反轉成最舊的在前面來計算 pity
-  const chronologicalRecords = [...filteredRecords].reverse();
+  let chronologicalRecords = [...filteredRecords].reverse();
   
+  // 先進行排序，確保同時間的紀錄順序正確
+  // 按時間順序（舊到新），同時間的紀錄按 API 原始順序
+  chronologicalRecords.sort((a, b) => {
+    const timeA = new Date(a.time).getTime();
+    const timeB = new Date(b.time).getTime();
+    
+    if (timeA !== timeB) {
+      // 不同時間，舊的在前
+      return timeA - timeB;
+    }
+    
+    // 同時間，保持原始順序（不改變）
+    return 0;
+  });
+  
+  // 現在按照正確的時間順序計算 pity
   let pityCounter = 0; // 五星保底計數器
   let fourStarPity = 0; // 四星保底計數器
   
@@ -314,22 +330,8 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
   });
   
   // 反轉回最新的在前面（符合顯示習慣）
-  // 同時按時間和原始順序排序，確保同一時間的紀錄順序正確
+  // 現在排序已經正確，直接反轉即可
   const resultRecords = processedRecords.reverse();
-  
-  // 按時間排序（最新在前），同時間的紀錄按原始順序反序排列
-  resultRecords.sort((a, b) => {
-    const timeA = new Date(a.time).getTime();
-    const timeB = new Date(b.time).getTime();
-    
-    if (timeA !== timeB) {
-      // 不同時間，最新的在前
-      return timeB - timeA;
-    }
-    
-    // 同時間，按 pull（抽數）倒序排列（讓最新的抽在前）
-    return b.pull - a.pull;
-  });
   
   return resultRecords;
 };
