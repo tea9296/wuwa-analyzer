@@ -272,23 +272,38 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
     return [];
   }
 
-  // API 資料是最新的在前面（index 0），直接從後往前遍歷計算 pity
-  // 這樣可以保留同時間紀錄的原始 API 順序
-  let pityCounter = 0; // 五星保底計數器
-  let fourStarPity = 0; // 四星保底計數器
+  // 直接按照 API 順序處理，從前往後遍歷計算 pity
+  // API 順序就是時間順序（最舊在前面 index 0）
+  let pityCounter = 0;
+  let fourStarPity = 0;
   
-  // 從後往前遍歷（最舊的開始），計算每一個的 pity
-  const pityMap = new Map(); // 記錄每一項的 pity 值
-  
-  for (let i = filteredRecords.length - 1; i >= 0; i--) {
-    const item = filteredRecords[i];
+  const processedRecords = filteredRecords.map((item, index) => {
+    const poolType = parseInt(item.cardPoolType) || cardPoolType;
     const rarity = item.qualityLevel;
+    const name = item.name;
+    const resourceType = item.resourceType;
     
+    // 累加計數器
     pityCounter++;
     fourStarPity++;
     
+    // 記錄當前 pity
     const pityValue = rarity === 5 ? pityCounter : (rarity === 4 ? fourStarPity : 0);
-    pityMap.set(i, { pityValue, rarity });
+    
+    // 建立記錄
+    const record = {
+      id: `${poolType}-${index}`,
+      pull: index + 1,
+      name: name,
+      rarity: rarity,
+      type: resourceType === '角色' ? 'character' : 'weapon',
+      time: item.time,
+      pity: pityValue,
+      poolType: poolType,
+      poolName: CARD_POOL_TYPES[poolType] || `卡池 ${poolType}`,
+      isLimited: rarity === 5 ? isLimitedFiveStar(name, poolType) : false,
+      resourceId: item.resourceId
+    };
     
     // 重置計數器
     if (rarity === 5) {
@@ -297,36 +312,11 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
     if (rarity === 4 || rarity === 5) {
       fourStarPity = 0;
     }
-  }
-  
-  // 現在構建最終結果（保持 API 順序，即最新的在前面）
-  const processedRecords = filteredRecords.map((item, index) => {
-    const poolType = parseInt(item.cardPoolType) || cardPoolType;
-    const rarity = item.qualityLevel;
-    const name = item.name;
-    const resourceType = item.resourceType;
-    
-    const pityInfo = pityMap.get(index);
-    
-    // 建立記錄
-    const record = {
-      id: `${poolType}-${index}`,
-      pull: filteredRecords.length - index, // 反向計數
-      name: name,
-      rarity: rarity,
-      type: resourceType === '角色' ? 'character' : 'weapon',
-      time: item.time,
-      pity: pityInfo.pityValue,
-      poolType: poolType,
-      poolName: CARD_POOL_TYPES[poolType] || `卡池 ${poolType}`,
-      isLimited: rarity === 5 ? isLimitedFiveStar(name, poolType) : false,
-      resourceId: item.resourceId
-    };
     
     return record;
   });
   
-  // 反轉讓最新的在前面顯示
+  // 反轉成最新的在前面顯示
   return processedRecords.reverse();
 };
 
