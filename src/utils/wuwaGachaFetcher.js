@@ -262,8 +262,18 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
     return [];
   }
 
+  // 只篩選指定卡池類型的紀錄（預設只要角色活動池 1）
+  const filteredRecords = rawRecords.filter(item => {
+    const poolType = parseInt(item.cardPoolType) || cardPoolType;
+    return poolType === cardPoolType;
+  });
+
+  if (filteredRecords.length === 0) {
+    return [];
+  }
+
   // API 資料是最新的在前面（index 0），我們需要反轉成最舊的在前面來計算 pity
-  const chronologicalRecords = [...rawRecords].reverse();
+  const chronologicalRecords = [...filteredRecords].reverse();
   
   let pityCounter = 0; // 五星保底計數器
   let fourStarPity = 0; // 四星保底計數器
@@ -304,7 +314,24 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
   });
   
   // 反轉回最新的在前面（符合顯示習慣）
-  return processedRecords.reverse();
+  // 同時按時間和原始順序排序，確保同一時間的紀錄順序正確
+  const resultRecords = processedRecords.reverse();
+  
+  // 按時間排序（最新在前），同時間的紀錄按原始順序反序排列
+  resultRecords.sort((a, b) => {
+    const timeA = new Date(a.time).getTime();
+    const timeB = new Date(b.time).getTime();
+    
+    if (timeA !== timeB) {
+      // 不同時間，最新的在前
+      return timeB - timeA;
+    }
+    
+    // 同時間，按 pull（抽數）倒序排列（讓最新的抽在前）
+    return b.pull - a.pull;
+  });
+  
+  return resultRecords;
 };
 
 /**
