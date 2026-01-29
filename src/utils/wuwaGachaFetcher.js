@@ -124,9 +124,9 @@ const transformRecords = (records, cardPoolType) => {
 export const fetchAllGachaRecords = async (url, onProgress) => {
   const params = parseWuwaUrl(url);
   
-  // 要查詢的卡池類型 (1-7)
-  const poolTypesToFetch = [1, 2, 3, 4, 5, 6, 7];
-  
+  // 只查詢角色活動池 (1)
+  const poolTypesToFetch = [1];
+  // const poolTypesToFetch = [1, 2, 3, 4, 5, 6, 7]; // 如果要查詢所有卡池，取消註解這行
   const allRecords = [];
   const recordsByPool = {};
   let fetchedPools = 0;

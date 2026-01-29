@@ -22,14 +22,14 @@ const GAME_CONFIGS = {
   Genshin: {
     name: '原神',
     color: 'from-amber-400 to-orange-400',
-    powershellCommand: 'iwr -UseBasicParsing https://raw.githubusercontent.com/genshin-wishes/genshin-wishes-getlink/main/genshin-wishes-getlink.ps1 | iex',
+    powershellCommand: 'Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex "&{$((New-Object System.Net.WebClient).DownloadString(\'https://gist.github.com/MadeBaruna/1d75c1d37d19eca71591ec8a31178235/raw/getlink.ps1\'))} global"',
     instructions: [
       '啟動遊戲並打開「祈願歷史紀錄」頁面',
       '打開 Windows PowerShell 並貼上下方指令執行',
       '複製獲取到的 URL 並貼到下方輸入框',
       '點擊「匯入資料」按鈕'
     ],
-    docUrl: 'https://github.com/genshin-wishes/genshin-wishes-getlink',
+    docUrl: 'https://gist.github.com/MadeBaruna/1d75c1d37d19eca71591ec8a31178235',
     calculator: genshinCalc
   },
   StarRail: {
@@ -43,7 +43,7 @@ const GAME_CONFIGS = {
       '點擊「匯入資料」按鈕'
     ],
     docUrl: 'https://github.com/srliao/StarRailGachaGetter',
-    calculator: wuwaCalc  // 星鐵機制與鳴潮類似，暫時共用
+    calculator: wuwaCalc  // 暫不開發
   }
 };
 
