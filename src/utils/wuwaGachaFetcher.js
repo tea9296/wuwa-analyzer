@@ -272,22 +272,14 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
     return [];
   }
 
-  // API 資料是最新的在前面（index 0），我們需要反轉成最舊的在前面來計算 pity
-  let chronologicalRecords = [...filteredRecords].reverse();
+  // API 資料是最新的在前面，先反轉成時間順序（舊到新）用於計算 pity
+  const chronologicalRecords = [...filteredRecords].reverse();
   
-  // 先進行排序，確保同時間的紀錄順序正確
-  // 按時間順序（舊到新），同時間的紀錄按 API 原始順序
+  // 按時間排序，確保時間相同時保持 API 原始順序
   chronologicalRecords.sort((a, b) => {
     const timeA = new Date(a.time).getTime();
     const timeB = new Date(b.time).getTime();
-    
-    if (timeA !== timeB) {
-      // 不同時間，舊的在前
-      return timeA - timeB;
-    }
-    
-    // 同時間，保持原始順序（不改變）
-    return 0;
+    return timeA - timeB; // 舊到新
   });
   
   // 現在按照正確的時間順序計算 pity
@@ -303,20 +295,8 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
     const name = item.name;
     const resourceType = item.resourceType;
     
-    // 建立記錄
-    const record = {
-      id: `${poolType}-${index}`,
-      pull: index + 1, // 第幾抽（從1開始）
-      name: name,
-      rarity: rarity,
-      type: resourceType === '角色' ? 'character' : 'weapon',
-      time: item.time,
-      pity: rarity === 5 ? pityCounter : (rarity === 4 ? fourStarPity : 0),
-      poolType: poolType,
-      poolName: CARD_POOL_TYPES[poolType] || `卡池 ${poolType}`,
-      isLimited: rarity === 5 ? isLimitedFiveStar(name, poolType) : false,
-      resourceId: item.resourceId
-    };
+    // 在重置前先記錄 pity 值
+    const pityValue = rarity === 5 ? pityCounter : (rarity === 4 ? fourStarPity : 0);
     
     // 重置計數器
     if (rarity === 5) {
@@ -326,14 +306,26 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
       fourStarPity = 0;
     }
     
+    // 建立記錄
+    const record = {
+      id: `${poolType}-${index}`,
+      pull: index + 1, // 第幾抽（從1開始）
+      name: name,
+      rarity: rarity,
+      type: resourceType === '角色' ? 'character' : 'weapon',
+      time: item.time,
+      pity: pityValue,
+      poolType: poolType,
+      poolName: CARD_POOL_TYPES[poolType] || `卡池 ${poolType}`,
+      isLimited: rarity === 5 ? isLimitedFiveStar(name, poolType) : false,
+      resourceId: item.resourceId
+    };
+    
     return record;
   });
   
   // 反轉回最新的在前面（符合顯示習慣）
-  // 現在排序已經正確，直接反轉即可
-  const resultRecords = processedRecords.reverse();
-  
-  return resultRecords;
+  return processedRecords.reverse();
 };
 
 /**
