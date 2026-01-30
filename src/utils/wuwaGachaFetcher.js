@@ -262,61 +262,46 @@ export const convertRawRecordsToStats = (rawRecords, cardPoolType = 1) => {
     return [];
   }
 
-  // 只篩選指定卡池類型的紀錄（預設只要角色活動池 1）
-  const filteredRecords = rawRecords.filter(item => {
-    const poolType = parseInt(item.cardPoolType) || cardPoolType;
-    return poolType === cardPoolType;
-  });
+  // 1. 篩選指定池子，並「立即反轉」成舊到新 (Oldest First)
+  // 這樣 index 0 就會是最早的那一抽
+  const chronologicalRecords = rawRecords
+    .filter(item => (parseInt(item.cardPoolType) || cardPoolType) === cardPoolType)
+    .reverse(); 
 
-  if (filteredRecords.length === 0) {
+  if (chronologicalRecords.length === 0) {
     return [];
   }
 
-  // 直接按照 API 順序處理，從前往後遍歷計算 pity
-  // API 順序就是時間順序（最舊在前面 index 0）
   let pityCounter = 0;
   let fourStarPity = 0;
   
-  const processedRecords = filteredRecords.map((item, index) => {
-    const poolType = parseInt(item.cardPoolType) || cardPoolType;
+  const processedRecords = chronologicalRecords.map((item, index) => {
     const rarity = item.qualityLevel;
     const name = item.name;
-    const resourceType = item.resourceType;
     
-    // 累加計數器
     pityCounter++;
     fourStarPity++;
     
-    // 記錄當前 pity
-    const pityValue = rarity === 5 ? pityCounter : (rarity === 4 ? fourStarPity : 0);
+    // 這裡計算的 pity 就會是正確的「距離上次出金/出紫」的抽數
+    const currentPity = rarity === 5 ? pityCounter : (rarity === 4 ? fourStarPity : 0);
     
-    // 建立記錄
     const record = {
-      id: `${poolType}-${index}`,
-      pull: index + 1,
-      name: name,
-      rarity: rarity,
-      type: resourceType === '角色' ? 'character' : 'weapon',
-      time: item.time,
-      pity: pityValue,
-      poolType: poolType,
-      poolName: CARD_POOL_TYPES[poolType] || `卡池 ${poolType}`,
-      isLimited: rarity === 5 ? isLimitedFiveStar(name, poolType) : false,
-      resourceId: item.resourceId
+      ...item, // 保留原始所有資料
+      id: `${item.cardPoolType || cardPoolType}-${index}`,
+      pull: index + 1, // 這是總第幾抽
+      pity: currentPity, // 這是水位
+      isLimited: rarity === 5 ? isLimitedFiveStar(name, parseInt(item.cardPoolType) || cardPoolType) : false,
+      type: item.resourceType === '角色' ? 'character' : 'weapon',
     };
     
-    // 重置計數器
-    if (rarity === 5) {
-      pityCounter = 0;
-    }
-    if (rarity === 4 || rarity === 5) {
-      fourStarPity = 0;
-    }
+    // 重置
+    if (rarity === 5) pityCounter = 0;
+    if (rarity === 4 || rarity === 5) fourStarPity = 0;
     
     return record;
   });
   
-  // 反轉成最新的在前面顯示
+  // 2. 最後再反轉回來，讓 UI 顯示「最新在最上面」
   return processedRecords.reverse();
 };
 
