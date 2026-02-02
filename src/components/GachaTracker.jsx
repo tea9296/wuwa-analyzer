@@ -219,10 +219,13 @@ const ImportPanel = ({ gameConfig, currentGame, onImport }) => {
 
   // 計算每筆紀錄的保底數並判斷是否為限定
   const calculatePityForRecords = (records, calc) => {
-    // 按時間排序（舊的在前）
-    const sortedRecords = [...records].sort((a, b) => 
-      new Date(a.time) - new Date(b.time)
-    );
+    // 按時間排序（舊的在前），時間相同時按記錄序號排序
+    const sortedRecords = [...records].sort((a, b) => {
+      const timeDiff = new Date(a.time) - new Date(b.time);
+      if (timeDiff !== 0) return timeDiff;
+      // 時間相同時，按記錄序號升序排列
+      return a.recordIndex - b.recordIndex;
+    });
 
     // 常駐五星角色（很少變動）
     const STANDARD_FIVE_STAR_CHARACTERS = ['凌陽', '維里奈', '安可', '卡卡羅', '鑒心'];

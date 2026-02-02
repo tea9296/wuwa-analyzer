@@ -110,6 +110,7 @@ const transformRecords = (records, cardPoolType) => {
     rarity: item.qualityLevel,
     type: item.resourceType === '角色' ? 'character' : 'weapon',
     time: item.time,
+    recordIndex: index,  // 添加記錄序號，用於排序同時間的項目
     cardPoolType: cardPoolType,
     cardPoolName: CARD_POOL_TYPES[cardPoolType] || `卡池 ${cardPoolType}`
   }));
@@ -167,8 +168,13 @@ export const fetchAllGachaRecords = async (url, onProgress) => {
     }
   }
 
-  // 按時間排序（最新的在前面）
-  allRecords.sort((a, b) => new Date(b.time) - new Date(a.time));
+  // 按時間排序（最新的在前面），時間相同時按記錄序號排序
+  allRecords.sort((a, b) => {
+    const timeDiff = new Date(b.time) - new Date(a.time);
+    if (timeDiff !== 0) return timeDiff;
+    // 時間相同時，按記錄序號降序排列（保持原始順序）
+    return b.recordIndex - a.recordIndex;
+  });
 
   return {
     playerId: params.playerId,
@@ -318,8 +324,13 @@ export const mergePoolRecords = (recordsByPool) => {
     allRecords.push(...processed);
   }
   
-  // 按時間排序（最新的在前面）
-  allRecords.sort((a, b) => new Date(b.time) - new Date(a.time));
+  // 按時間排序（最新的在前面），時間相同時按記錄序號排序
+  allRecords.sort((a, b) => {
+    const timeDiff = new Date(b.time) - new Date(a.time);
+    if (timeDiff !== 0) return timeDiff;
+    // 時間相同時，按記錄序號降序排列（保持原始順序）
+    return b.recordIndex - a.recordIndex;
+  });
   
   return allRecords;
 };
